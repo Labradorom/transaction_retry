@@ -14,21 +14,20 @@ module TransactionRetry
         end
       end
       
-      module ClassMethods
-        
+      module ClassMethods        
         def transaction_with_retry(*objects, &block)
           retry_count = 0
 
           begin
             transaction_without_retry(*objects, &block)
-          rescue ActiveRecord::StatementInvalid => ex
+          rescue StandardError => ex
             if ex.message == 'Deadlock found when trying to get lock; try restarting transaction'
               raise if retry_count >= TransactionRetry.max_retries
               raise if tr_in_nested_transaction?
               
               retry_count += 1
               postfix = { 1 => 'st', 2 => 'nd', 3 => 'rd' }[retry_count] || 'th'
-              logger.warn "Transaction isolation conflict detected. Retrying for the #{retry_count}-#{postfix} time..." if logger
+              logger.info "[ERR] Transaction isolation conflict detected. #{ex.class} - Retrying for the #{retry_count}-#{postfix} time..." if logger
               tr_exponential_pause( retry_count )
 
               retry
@@ -52,7 +51,6 @@ module TransactionRetry
           def tr_in_nested_transaction?
             connection.open_transactions != 0
           end
-
       end
     end
   end
